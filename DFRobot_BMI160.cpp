@@ -927,12 +927,54 @@ int8_t DFRobot_BMI160::SPISetRegs(struct bmi160Dev *dev, uint8_t reg_addr, uint8
   return BMI160_OK;
 }
 
-int8_t DFRobot_BMI160::setInt(int intNum)
+int8_t DFRobot_BMI160::setStepInt(int intNum)
 {
-  return setInt(Obmi160,intNum);  
+  return setStepInt(Obmi160,intNum);  
 }
 
-int8_t DFRobot_BMI160::setInt(struct bmi160Dev *dev, int intNum)
+int8_t DFRobot_BMI160::setSigMotionInt(int intNum)
+{
+  return setSigMotionInt(Obmi160,intNum);  
+}
+
+int8_t DFRobot_BMI160::setSigMotionInt(struct bmi160Dev *dev, int intNum)
+{
+  int8_t rslt=BMI160_OK;
+  if (dev == NULL){
+    rslt = BMI160_E_NULL_PTR;
+  }
+  struct bmi160IntSettg intConfig;
+  if (intNum == 1){
+    intConfig.intChannel = BMI160_INT_CHANNEL_1;
+  }else if(intNum == 2){
+    intConfig.intChannel = BMI160_INT_CHANNEL_2;
+  }else{
+    return BMI160_E_NULL_PTR;
+  }
+  
+  /* Select the Interrupt type */
+  intConfig.intType = BMI160_ACC_SIG_MOTION_INT;// Choosing Significant Motion interrupt
+  /* Select the interrupt channel/pin settings */
+  intConfig.intPinSettg.outputEn = BMI160_ENABLE;// Enabling interrupt pins to act as output pin
+  intConfig.intPinSettg.outputMode = BMI160_DISABLE;// Choosing push-pull mode for interrupt pin
+  intConfig.intPinSettg.outputType = BMI160_ENABLE;// Choosing active High output
+  intConfig.intPinSettg.edgeCtrl = BMI160_ENABLE;// Choosing edge triggered output
+  intConfig.intPinSettg.inputEn = BMI160_DISABLE;// Disabling interrupt pin to act as input
+  intConfig.intPinSettg.latchDur =BMI160_LATCH_DUR_NONE;// non-latched output
+
+  /* Select the Step Detector interrupt parameters, Kindly use the recommended settings for step detector */
+  intConfig.intTypeCfg.accSigMotionInt.sigDataSrc = 1;
+  intConfig.intTypeCfg.accSigMotionInt.sigEn = BMI160_ENABLE;// 1-enable, 0-disable the step detector
+  intConfig.intTypeCfg.accSigMotionInt.sigMotProof = 0x02; // 0.96s 0=0.24s, 1=0.48s, 2=0.96s 3=1.92s
+  intConfig.intTypeCfg.accSigMotionInt.sigMotSkip = 0x01; // 2.56s 0=1.28s, 1=2.56s, 2=5,12s 3=10.24s
+  intConfig.intTypeCfg.accSigMotionInt.sigMotThres = 0x14; // ~ 70mg same as anym_th
+  rslt = DFRobot_BMI160::setIntConfig(&intConfig, dev);
+  return rslt;
+}
+
+// TODO: Need to have a version for significant motion - look at
+//       https://github.com/boschsensortec/BMI160_driver/
+int8_t DFRobot_BMI160::setStepInt(struct bmi160Dev *dev, int intNum)
 {
   int8_t rslt=BMI160_OK;
   if (dev == NULL){
@@ -974,7 +1016,7 @@ int8_t DFRobot_BMI160::setIntConfig(struct bmi160IntSettg *intConfig, struct bmi
     break;
   case BMI160_ACC_SIG_MOTION_INT:
     /* Significant motion interrupt */
-    //rslt = set_accel_sig_motion_int(intConfig, dev);
+    rslt = setAccelSigMotionInt(intConfig, dev);
     break;
   case BMI160_ACC_SLOW_NO_MOTION_INT:
     /* Slow or no motion interrupt */
@@ -1021,6 +1063,163 @@ int8_t DFRobot_BMI160::setIntConfig(struct bmi160IntSettg *intConfig, struct bmi
     break;
   }
   return rslt;  
+}
+
+/*!
+ * @brief This API enables the sig-motion motion interrupt.
+ */
+int8_t DFRobot_BMI160::enableSigMotionInt(struct bmi160AccSigMotIntCfg *sig_mot_int_cfg, struct bmi160Dev *dev)
+{
+    int8_t rslt;
+    uint8_t data = 0;
+    uint8_t temp = 0;
+
+    /* For significant motion,enable any motion x,any motion y,
+     * any motion z in Int Enable 0 register */
+    rslt = getRegs(BMI160_INT_ENABLE_0_ADDR, &data, 1, dev);
+    if (rslt == BMI160_OK)
+    {
+        if (sig_mot_int_cfg->sigEn == BMI160_ENABLE)
+        {
+            temp = data & ~BMI160_SIG_MOTION_INT_EN_MASK;
+            data = temp | (7 & BMI160_SIG_MOTION_INT_EN_MASK);
+
+            /* sig-motion feature selected*/
+            dev->any_sig_sel = eBmi160SigMotionEnabled;
+        }
+        else
+        {
+            data = data & ~BMI160_SIG_MOTION_INT_EN_MASK;
+
+            /* neither any-motion feature nor sig-motion selected */
+            dev->any_sig_sel = eBmi160BothAnySigMotionDisabled;
+        }
+
+        /* write data to Int Enable 0 register */
+        rslt = setRegs(BMI160_INT_ENABLE_0_ADDR, &data, 1, dev);
+    }
+
+    return rslt;
+}
+
+/*!
+ * @brief This API configure the interrupt PIN setting for
+ * significant motion interrupt.
+ */
+int8_t DFRobot_BMI160::configSigMotionIntSettg(struct bmi160IntSettg *int_config,
+                                          struct bmi160AccSigMotIntCfg *sig_mot_int_cfg,
+                                          struct bmi160Dev *dev)
+{
+    int8_t rslt;
+
+    /* Configure Interrupt pins */
+    rslt = setIntrPinConfig(int_config, dev);
+    if (rslt == BMI160_OK)
+    {
+        rslt = mapFeatureInterrupt(int_config, dev);
+        if (rslt == BMI160_OK)
+        {
+            rslt = configSigMotionDataSrc(sig_mot_int_cfg, dev);
+            if (rslt == BMI160_OK)
+            {
+                rslt = configSigDurThreshold(sig_mot_int_cfg, dev);
+            }
+        }
+    }
+
+    return rslt;
+}
+
+/*!
+ * @brief This API configure the source of data(filter & pre-filter)
+ * for sig motion interrupt.
+ */
+int8_t DFRobot_BMI160::configSigMotionDataSrc(struct bmi160AccSigMotIntCfg *sig_mot_int_cfg,
+                                              struct bmi160Dev *dev)
+{
+    int8_t rslt;
+    uint8_t data = 0;
+    uint8_t temp = 0;
+
+    /* Configure Int data 1 register to add source of interrupt */
+    rslt = getRegs(BMI160_INT_DATA_1_ADDR, &data, 1, dev);
+    if (rslt == BMI160_OK)
+    {
+        temp = data & ~BMI160_MOTION_SRC_INT_MASK;
+        data = temp | ((sig_mot_int_cfg->sigDataSrc << 7) & BMI160_MOTION_SRC_INT_MASK);
+
+        /* Write data to DATA 1 address */
+        rslt = setRegs(BMI160_INT_DATA_1_ADDR, &data, 1, dev);
+    }
+
+    return rslt;
+}
+
+/*!
+ * @brief This API configure the threshold, skip and proof time of
+ * sig motion interrupt.
+ */
+int8_t DFRobot_BMI160::configSigDurThreshold(struct bmi160AccSigMotIntCfg *sig_mot_int_cfg,
+                                        struct bmi160Dev *dev)
+{
+    int8_t rslt;
+    uint8_t data;
+    uint8_t temp = 0;
+
+    /* Configuring INT_MOTION registers */
+
+    /* Write significant motion threshold.
+     * This threshold is same as any motion threshold */
+    data = sig_mot_int_cfg->sigMotThres;
+
+    /* Write data to INT_MOTION 1 address */
+    rslt = setRegs(BMI160_INT_MOTION_1_ADDR, &data, 1, dev);
+    if (rslt == BMI160_OK)
+    {
+        rslt = setRegs(BMI160_INT_MOTION_3_ADDR, &data, 1, dev);
+        if (rslt == BMI160_OK)
+        {
+            temp = data & ~BMI160_SIG_MOTION_SKIP_MASK;
+
+            /* adding skip time of sig_motion interrupt*/
+            data = temp | ((sig_mot_int_cfg->sigMotSkip << 2) & BMI160_SIG_MOTION_SKIP_MASK);
+            temp = data & ~BMI160_SIG_MOTION_PROOF_MASK;
+
+            /* adding proof time of sig_motion interrupt */
+            data = temp | ((sig_mot_int_cfg->sigMotProof << 4) & BMI160_SIG_MOTION_PROOF_MASK);
+
+            /* configure the int_sig_mot_sel bit to select
+             * significant motion interrupt */
+            temp = data & ~BMI160_SIG_MOTION_SEL_MASK;
+            data = temp | ((sig_mot_int_cfg->sigEn << 1) & BMI160_SIG_MOTION_SEL_MASK);
+            rslt = setRegs(BMI160_INT_MOTION_3_ADDR, &data, 1, dev);
+        }
+    }
+
+    return rslt;
+}
+
+int8_t DFRobot_BMI160::setAccelSigMotionInt(struct bmi160IntSettg *intConfig, struct bmi160Dev *dev)
+{
+    int8_t rslt;
+
+    /* Null-pointer check */
+    if (dev == NULL || intConfig == NULL)
+    {
+        rslt = BMI160_E_NULL_PTR;
+    }
+    else
+    {
+        /* updating the interrupt structure to local structure */
+        struct bmi160AccSigMotIntCfg *sigMotIntCfg = &(intConfig->intTypeCfg.accSigMotionInt);
+        rslt = enableSigMotionInt(sigMotIntCfg, dev);
+        if (rslt == BMI160_OK)
+        {
+            rslt = configSigMotionIntSettg(intConfig, sigMotIntCfg, dev);
+        }
+    }
+
+    return rslt;
 }
 
 int8_t DFRobot_BMI160::setAccelStepDetectInt(struct bmi160IntSettg *intConfig, struct bmi160Dev *dev)

@@ -1000,13 +1000,21 @@ public:
   int8_t softReset();
   
   /**
-   * @fn setInt
+   * @fn setStepInt
    * @brief set interrupt number and choosing step detector interrupt
    * @param intNum choose int1 or int2
    * @return BMI160_OK(0) means succse
    */
-  int8_t setInt(int intNum);
-  
+  int8_t setStepInt(int intNum);
+
+  /**
+   * @fn setSigMotionInt
+   * @brief set interrupt number and choosing step detector interrupt
+   * @param intNum choose int1 or int2
+   * @return BMI160_OK(0) means succse
+   */
+  int8_t setSigMotionInt(int intNum);
+
   /**
    * @fn setStepCounter
    * @brief enable the step counter
@@ -1080,8 +1088,9 @@ public:
     int8_t SPIGetRegs(struct bmi160Dev *dev, uint8_t reg_addr, uint8_t *data, uint16_t len);
     int8_t SPISetRegs(struct bmi160Dev *dev, uint8_t reg_addr, uint8_t *data, uint16_t len);
 
-    
-    int8_t setInt(struct bmi160Dev *dev, int intNum);
+
+    int8_t setSigMotionInt(struct bmi160Dev *dev, int intNum);
+    int8_t setStepInt(struct bmi160Dev *dev, int intNum);
     int8_t setIntConfig(struct bmi160IntSettg *intConfig, struct bmi160Dev *dev);
     int8_t setAccelStepDetectInt(struct bmi160IntSettg *intConfig, struct bmi160Dev *dev);
     int8_t enableStepDetectInt(struct bmi160AccStepDetectIntCfg *stepDetectIntCfg, struct bmi160Dev *dev);
@@ -1090,6 +1099,12 @@ public:
     int8_t configIntLatch(struct bmi160IntSettg *intConfig, struct bmi160Dev *dev);
     int8_t mapFeatureInterrupt(struct bmi160IntSettg *intConfig, struct bmi160Dev *dev);
     int8_t configStepDetect(struct bmi160AccStepDetectIntCfg *stepDetectIntCfg, struct bmi160Dev *dev);
+
+    int8_t enableSigMotionInt(struct bmi160AccSigMotIntCfg *sig_mot_int_cfg, struct bmi160Dev *dev);
+    int8_t configSigMotionIntSettg(struct bmi160IntSettg *int_config, struct bmi160AccSigMotIntCfg *sig_mot_int_cfg, struct bmi160Dev *dev);
+    int8_t configSigMotionDataSrc(struct bmi160AccSigMotIntCfg *sig_mot_int_cfg, struct bmi160Dev *dev);
+    int8_t configSigDurThreshold(struct bmi160AccSigMotIntCfg *sig_mot_int_cfg, struct bmi160Dev *dev);
+    int8_t setAccelSigMotionInt(struct bmi160IntSettg *intConfig, struct bmi160Dev *dev);
 
     int8_t setStepCounter(uint8_t step_cnt_enable, struct bmi160Dev *dev);
     int8_t setStepPowerMode(uint8_t model,struct bmi160Dev *dev);
